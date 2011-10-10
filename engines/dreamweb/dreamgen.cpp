@@ -5029,25 +5029,6 @@ void DreamGenContext::cantdrop() {
 	worktoscreenm();
 }
 
-void DreamGenContext::wornerror() {
-	STACK_CHECK;
-	data.byte(kCommandtype) = 255;
-	delpointer();
-	di = 76;
-	bx = 21;
-	al = 57;
-	dl = 240;
-	printmessage();
-	worktoscreenm();
-	cx = 50;
-	hangonp();
-	showpanel();
-	showman();
-	examicon();
-	data.byte(kCommandtype) = 255;
-	worktoscreenm();
-}
-
 void DreamGenContext::removeobfrominv() {
 	STACK_CHECK;
 	_cmp(data.byte(kCommand), 100);
@@ -12360,47 +12341,6 @@ void DreamGenContext::findtext1() {
 	si = ax;
 }
 
-void DreamGenContext::zoomonoff() {
-	STACK_CHECK;
-	_cmp(data.word(kWatchingtime), 0);
-	if (!flags.z())
-		{ blank(); return; };
-	_cmp(data.byte(kPointermode), 2);
-	if (flags.z())
-		{ blank(); return; };
-	_cmp(data.byte(kCommandtype), 222);
-	if (flags.z())
-		goto alreadyonoff;
-	data.byte(kCommandtype) = 222;
-	al = 39;
-	commandonly();
-alreadyonoff:
-	ax = data.word(kMousebutton);
-	_cmp(ax, data.word(kOldbutton));
-	if (flags.z())
-		return /* (nozoomonoff) */;
-	_and(ax, 1);
-	if (!flags.z())
-		goto dozoomonoff;
-	return;
-dozoomonoff:
-	al = data.byte(kZoomon);
-	_xor(al, 1);
-	data.byte(kZoomon) = al;
-	createpanel();
-	data.byte(kNewobs) = 0;
-	drawfloor();
-	printsprites();
-	reelsonscreen();
-	showicon();
-	getunderzoom();
-	undertextline();
-	al = 39;
-	commandonly();
-	readmouse();
-	worktoscreenm();
-}
-
 void DreamGenContext::saveload() {
 	STACK_CHECK;
 	_cmp(data.word(kWatchingtime), 0);
@@ -14651,14 +14591,6 @@ void DreamGenContext::afterintroroom() {
 	data.byte(kNowinnewroom) = 0;
 }
 
-void DreamGenContext::examineobtext() {
-	STACK_CHECK;
-	bl = data.byte(kCommand);
-	bh = data.byte(kCommandtype);
-	al = 1;
-	commandwithob();
-}
-
 void DreamGenContext::printmessage2() {
 	STACK_CHECK;
 	push(dx);
@@ -14729,134 +14661,6 @@ alreadywalking:
 holdingreel:
 	data.byte(kDestafterhold) = al;
 	data.byte(kWatchmode) = 2;
-}
-
-void DreamGenContext::bresenhams() {
-	STACK_CHECK;
-	workoutframes();
-	dx = data;
-	es = dx;
-	di = 8173;
-	si = 1;
-	data.byte(kLinedirection) = 0;
-	cx = data.word(kLineendx);
-	_sub(cx, data.word(kLinestartx));
-	if (flags.z())
-		goto vertline;
-	if (!flags.s())
-		goto line1;
-	_neg(cx);
-	bx = data.word(kLineendx);
-	_xchg(bx, data.word(kLinestartx));
-	data.word(kLineendx) = bx;
-	bx = data.word(kLineendy);
-	_xchg(bx, data.word(kLinestarty));
-	data.word(kLineendy) = bx;
-	data.byte(kLinedirection) = 1;
-line1:
-	bx = data.word(kLineendy);
-	_sub(bx, data.word(kLinestarty));
-	if (flags.z())
-		goto horizline;
-	if (!flags.s())
-		goto line3;
-	_neg(bx);
-	_neg(si);
-line3:
-	push(si);
-	data.byte(kLineroutine) = 0;
-	_cmp(bx, cx);
-	if (flags.le())
-		goto line4;
-	data.byte(kLineroutine) = 1;
-	_xchg(bx, cx);
-line4:
-	_shl(bx, 1);
-	data.word(kIncrement1) = bx;
-	_sub(bx, cx);
-	si = bx;
-	_sub(bx, cx);
-	data.word(kIncrement2) = bx;
-	ax = data.word(kLinestartx);
-	bx = data.word(kLinestarty);
-	ah = bl;
-	_inc(cx);
-	bx = pop();
-	_cmp(data.byte(kLineroutine), 1);
-	if (flags.z())
-		goto hislope;
-	goto loslope;
-vertline:
-	ax = data.word(kLinestarty);
-	bx = data.word(kLineendy);
-	cx = bx;
-	_sub(cx, ax);
-	if (!flags.l())
-		goto line31;
-	_neg(cx);
-	ax = bx;
-	data.byte(kLinedirection) = 1;
-line31:
-	_inc(cx);
-	bx = data.word(kLinestartx);
-	_xchg(ax, bx);
-	ah = bl;
-	bx = si;
-line32:
-	_stosw();
-	_add(ah, bl);
-	if (--cx)
-		goto line32;
-	goto lineexit;
-horizline:
-	ax = data.word(kLinestartx);
-	bx = data.word(kLinestarty);
-	ah = bl;
-	_inc(cx);
-horizloop:
-	_stosw();
-	_inc(al);
-	if (--cx)
-		goto horizloop;
-	goto lineexit;
-loslope:
-loloop:
-	_stosw();
-	_inc(al);
-	_or(si, si);
-	if (!flags.s())
-		goto line12;
-	_add(si, data.word(kIncrement1));
-	if (--cx)
-		goto loloop;
-	goto lineexit;
-line12:
-	_add(si, data.word(kIncrement2));
-	_add(ah, bl);
-	if (--cx)
-		goto loloop;
-	goto lineexit;
-hislope:
-hiloop:
-	_stosw();
-	_add(ah, bl);
-	_or(si, si);
-	if (!flags.s())
-		goto line23;
-	_add(si, data.word(kIncrement1));
-	if (--cx)
-		goto hiloop;
-	goto lineexit;
-line23:
-	_add(si, data.word(kIncrement2));
-	_inc(al);
-	if (--cx)
-		goto hiloop;
-lineexit:
-	_sub(di, 8173);
-	ax = di;
-	_shr(ax, 1);
-	data.byte(kLinelength) = al;
 }
 
 void DreamGenContext::workoutframes() {
@@ -17043,7 +16847,6 @@ void DreamGenContext::__dispatch_call(uint16 addr) {
 		case addr_dropobject: dropobject(); break;
 		case addr_droperror: droperror(); break;
 		case addr_cantdrop: cantdrop(); break;
-		case addr_wornerror: wornerror(); break;
 		case addr_removeobfrominv: removeobfrominv(); break;
 		case addr_selectopenob: selectopenob(); break;
 		case addr_useopened: useopened(); break;
@@ -17393,10 +17196,8 @@ void DreamGenContext::__dispatch_call(uint16 addr) {
 		case addr_atmospheres: atmospheres(); break;
 		case addr_walkintoroom: walkintoroom(); break;
 		case addr_afterintroroom: afterintroroom(); break;
-		case addr_examineobtext: examineobtext(); break;
 		case addr_printmessage2: printmessage2(); break;
 		case addr_setwalk: setwalk(); break;
-		case addr_bresenhams: bresenhams(); break;
 		case addr_workoutframes: workoutframes(); break;
 		case addr_showicon: showicon(); break;
 		case addr_middlepanel: middlepanel(); break;

@@ -56,7 +56,7 @@ void GfxText32::purgeCache() {
 	_textCache.clear();
 }
 
-void GfxText32::createTextBitmap(reg_t textObject) {
+reg_t GfxText32::createTextBitmap(reg_t textObject, uint16 maxWidth, uint16 maxHeight) {
 	if (_textCache.size() >= MAX_CACHED_TEXTS)
 		purgeCache();
 
@@ -70,11 +70,14 @@ void GfxText32::createTextBitmap(reg_t textObject) {
 		_textCache.erase(textId);
 	}
 
-	_textCache[textId] = createTextEntry(textObject);
+	_textCache[textId] = createTextEntry(textObject, maxWidth, maxHeight);
+
+	// TODO: Create a new hunk pointer with the created surface
+	return NULL_REG;
 }
 
 // TODO: Finish this!
-void GfxText32::drawTextBitmap(reg_t textObject, uint16 textX, uint16 textY, uint16 w) {
+void GfxText32::drawTextBitmap(reg_t textObject, uint16 textX, uint16 textY, uint16 planeWidth) {
 	uint32 textId = (textObject.segment << 16) | textObject.offset;
 
 	if (!_textCache.contains(textId))
@@ -90,9 +93,10 @@ void GfxText32::drawTextBitmap(reg_t textObject, uint16 textX, uint16 textY, uin
 
 	const char *txt = entry->text.c_str();
 	int16 charCount;
+	uint16 maxWidth = (planeWidth > 0) ? planeWidth : _screen->getWidth() - textX;
 
 	while (*txt) {
-		charCount = GetLongest(txt, w, font);
+		charCount = GetLongest(txt, maxWidth, font);
 		if (charCount == 0)
 			break;
 
@@ -132,8 +136,10 @@ TextEntry *GfxText32::getTextEntry(reg_t textObject) {
 }
 
 // TODO: Finish this! Currently buggy.
-TextEntry *GfxText32::createTextEntry(reg_t textObject) {
+TextEntry *GfxText32::createTextEntry(reg_t textObject, uint16 maxWidth, uint16 maxHeight) {
 	reg_t stringObject = readSelector(_segMan, textObject, SELECTOR(text));
+
+	// TODO: maxWidth, maxHeight (if > 0)
 
 	// The object in the text selector of the item can be either a raw string
 	// or a Str object. In the latter case, we need to access the object's data
@@ -173,10 +179,9 @@ TextEntry *GfxText32::createTextEntry(reg_t textObject) {
 	memset(newEntry->surface, 0, newEntry->width * newEntry->height);
 	newEntry->text = _segMan->getString(stringObject);
 
-	int16 maxTextWidth, charCount;
+	int16 /*maxTextWidth = 0,*/ charCount = 0;
 	uint16 curX = 0, curY = 0;
 
-	maxTextWidth = 0;
 	while (*text) {
 		charCount = GetLongest(text, planeRect.width(), font);
 		if (charCount == 0)
@@ -233,6 +238,79 @@ int16 GfxText32::GetLongest(const char *text, int16 maxWidth, GfxFont *font) {
 	}
 
 	return maxChars;
+}
+
+void GfxText32::kernelTextSize(const char *text, int16 font, int16 maxWidth, int16 *textWidth, int16 *textHeight) {
+	Common::Rect rect(0, 0, 0, 0);
+	Size(rect, text, font, maxWidth);
+	*textWidth = rect.width();
+	*textHeight = rect.height();
+}
+
+void GfxText32::StringWidth(const char *str, GuiResourceId fontId, int16 &textWidth, int16 &textHeight) {
+	Width(str, 0, (int16)strlen(str), fontId, textWidth, textHeight, true);
+}
+
+void GfxText32::Width(const char *text, int16 from, int16 len, GuiResourceId fontId, int16 &textWidth, int16 &textHeight, bool restoreFont) {
+	uint16 curChar;
+	textWidth = 0; textHeight = 0;
+
+	GfxFont *font = _cache->getFont(fontId);
+
+	if (font) {
+		text += from;
+		while (len--) {
+			curChar = (*(const byte *)text++);
+			switch (curChar) {
+			case 0x0A:
+			case 0x0D:
+			case 0x9781: // this one is used by SQ4/japanese as line break as well
+				textHeight = MAX<int16> (textHeight, font->getHeight());
+				break;
+			case 0x7C:
+				warning("Code processing isn't implemented in SCI32");
+				break;
+			default:
+				textHeight = MAX<int16> (textHeight, font->getHeight());
+				textWidth += font->getCharWidth(curChar);
+				break;
+			}
+		}
+	}
+}
+
+int16 GfxText32::Size(Common::Rect &rect, const char *text, GuiResourceId fontId, int16 maxWidth) {
+	int16 charCount;
+	int16 maxTextWidth = 0, textWidth;
+	int16 totalHeight = 0, textHeight;
+
+	rect.top = rect.left = 0;
+	GfxFont *font = _cache->getFont(fontId);
+
+	if (maxWidth < 0) { // force output as single line
+		StringWidth(text, fontId, textWidth, textHeight);
+		rect.bottom = textHeight;
+		rect.right = textWidth;
+	} else {
+		// rect.right=found widest line with RTextWidth and GetLongest
+		// rect.bottom=num. lines * GetPointSize
+		rect.right = (maxWidth ? maxWidth : 192);
+		const char *curPos = text;
+		while (*curPos) {
+			charCount = GetLongest(curPos, rect.right, font);
+			if (charCount == 0)
+				break;
+			Width(curPos, 0, charCount, fontId, textWidth, textHeight, false);
+			maxTextWidth = MAX(textWidth, maxTextWidth);
+			totalHeight += textHeight;
+			curPos += charCount;
+			while (*curPos == ' ')
+				curPos++; // skip over breaking spaces
+		}
+		rect.bottom = totalHeight;
+		rect.right = maxWidth ? maxWidth : MIN(rect.right, maxTextWidth);
+	}
+	return rect.right;
 }
 
 } // End of namespace Sci

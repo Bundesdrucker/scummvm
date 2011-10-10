@@ -91,7 +91,7 @@ public:
 public:
 	Scene50();
 	virtual Common::String getClassName() { return "Scene50"; }
-	virtual void postInit(SceneObjectList *OwnerList = NULL);	
+	virtual void postInit(SceneObjectList *OwnerList = NULL);
 	virtual void remove();
 	virtual void signal();
 	virtual void process(Event &event);
@@ -99,25 +99,25 @@ public:
 
 class Scene60 : public SceneExt {
 	/* Items */
-	class Item2: public NamedHotspot {
+	class Ignition: public NamedHotspot {
 	private:
 		bool check1();
 		bool check2();
 	public:
 		virtual bool startAction(CursorType action, Event &event);
-	};	
+	};
 	class Item3: public NamedHotspot {
 	public:
 		virtual bool startAction(CursorType action, Event &event);
-	};	
+	};
 	class Radio: public NamedHotspot {
 	public:
 		virtual bool startAction(CursorType action, Event &event);
-	};	
+	};
 	class Compartment: public NamedHotspot {
 	public:
 		virtual bool startAction(CursorType action, Event &event);
-	};	
+	};
 
 	/* Objects */
 	class MirandaCard: public NamedObject {
@@ -133,7 +133,7 @@ class Scene60 : public SceneExt {
 		bool _flag;
 		virtual bool startAction(CursorType action, Event &event);
 	};
-	
+
 	/* Actions */
 	class Action1: public ActionExt {
 	private:
@@ -159,9 +159,9 @@ public:
 	TicketBook _ticketBook;
 	CompartmentDoor _compartmentDoor;
 	SceneObject _dashboard;
-	AltSceneObject _car;
+	BackgroundSceneObject _car;
 	NamedHotspot _item1;
-	Item2 _item2;
+	Ignition _ignition;
 	Item3 _item3;
 	Radio _radio;
 	Compartment _compartment;
@@ -177,6 +177,7 @@ public:
 	Scene60();
 	virtual void synchronize(Serializer &s);
 	virtual void postInit(SceneObjectList *OwnerList = NULL);
+	virtual void remove();
 	virtual void signal();
 	virtual void dispatch();
 };

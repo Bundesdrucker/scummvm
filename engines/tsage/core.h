@@ -166,7 +166,7 @@ public:
 };
 
 #define ADD_PLAYER_MOVER(X, Y) { Common::Point pt(X, Y); PlayerMover *mover = new PlayerMover(); \
-	_globals->_player.addMover(mover, &pt, this); }
+	g_globals->_player.addMover(mover, &pt, this); }
 #define ADD_PLAYER_MOVER_NULL(OBJ, X, Y) { Common::Point pt(X, Y); PlayerMover *mover = new PlayerMover(); \
 	OBJ.addMover(mover, &pt, NULL); }
 #define ADD_PLAYER_MOVER_THIS(OBJ, X, Y) { Common::Point pt(X, Y); PlayerMover *mover = new PlayerMover(); \
@@ -451,12 +451,24 @@ public:
 	NamedHotspot();
 
 
-	virtual void doAction(int action);
+	virtual bool startAction(CursorType action, Event &event);
 	virtual Common::String getClassName() { return "NamedHotspot"; }
 	virtual void synchronize(Serializer &s);
 	virtual void setDetails(int ys, int xs, int ye, int xe, const int resnum, const int lookLineNum, const int useLineNum);
 	virtual void setDetails(const Rect &bounds, int resNum, int lookLineNum, int talkLineNum, int useLineNum, int mode, SceneItem *item);
 	virtual void setDetails(int sceneRegionId, int resNum, int lookLineNum, int talkLineNum, int useLineNum, int mode);
+};
+
+class NamedHotspotExt : public NamedHotspot {
+public:
+	int _flag;
+	NamedHotspotExt() { _flag = 0; }
+
+	virtual Common::String getClassName() { return "NamedHotspot"; }
+	virtual void synchronize(Serializer &s) {
+		NamedHotspot::synchronize(s);
+		s.syncAsSint16LE(_flag);
+	}
 };
 
 enum AnimateMode {ANIM_MODE_NONE = 0, ANIM_MODE_1 = 1, ANIM_MODE_2 = 2, ANIM_MODE_3 = 3,
@@ -518,7 +530,6 @@ private:
 	int getNewFrame();
 	void animEnded();
 	int changeFrame();
-	bool isNoMover() const { return !_mover || (_regionIndex > 0); }
 public:
 	uint32 _updateStartFrame;
 	uint32 _walkStartFrame;
@@ -573,6 +584,7 @@ public:
 	void show();
 	int getSpliceArea(const SceneObject *obj);
 	int getFrameCount();
+	bool isNoMover() const { return !_mover || (_regionIndex > 0); }
 
 	virtual void synchronize(Serializer &s);
 	virtual Common::String getClassName() { return "SceneObject"; }
@@ -594,9 +606,9 @@ public:
 	void setup(int visage, int stripFrameNum, int frameNum, int posX, int posY, int priority);
 };
 
-class AltSceneObject: public SceneObject {
+class BackgroundSceneObject: public SceneObject {
 public:
-	virtual Common::String getClassName() { return "AltObjectExt"; }
+	virtual Common::String getClassName() { return "BackgroundSceneObject"; }
 	virtual void postInit(SceneObjectList *OwnerList = NULL);
 	virtual void draw();
 };

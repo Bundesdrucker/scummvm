@@ -35,7 +35,7 @@ namespace BlueForce {
 
 using namespace TsAGE;
 
-#define BF_INVENTORY (*((::TsAGE::BlueForce::BlueForceInvObjectList *)_globals->_inventory))
+#define BF_INVENTORY (*((::TsAGE::BlueForce::BlueForceInvObjectList *)g_globals->_inventory))
 
 class BlueForceGame: public Game {
 public:
@@ -67,11 +67,11 @@ public:
 class Timer: public EventHandler {
 public:
 	Action *_tickAction;
-	Action *_endAction;
+	EventHandler *_endHandler;
 	uint32 _endFrame;
 public:
 	Timer();
-	void set(uint32 delay, Action *endAction);
+	void set(uint32 delay, EventHandler *endHandler);
 
 	virtual Common::String getClassName() { return "Timer"; }
 	virtual void synchronize(Serializer &s);
@@ -83,16 +83,28 @@ public:
 class TimerExt: public Timer {
 public:
 	Action *_newAction;
-public:	
+public:
 	TimerExt();
-	void set(uint32 delay, Action *endAction, Action *action);
+	void set(uint32 delay, EventHandler *endHandler, Action *action);
 
 	virtual Common::String getClassName() { return "TimerExt"; }
 	virtual void synchronize(Serializer &s);
 	virtual void remove();
 	virtual void signal();
-	virtual void dispatch();
-};	
+};
+
+
+class SceneHotspotExt: public SceneHotspot {
+public:
+	int _state;
+
+	SceneHotspotExt() { _state = 0; }
+	virtual Common::String getClassName() { return "SceneHotspotExt"; }
+	virtual void synchronize(Serializer &s) {
+		SceneHotspot::synchronize(s);
+		s.syncAsSint16LE(_state);
+	}
+};
 
 class SceneItemType2: public SceneHotspot {
 public:
@@ -110,6 +122,32 @@ public:
 	virtual bool startAction(CursorType action, Event &event);
 
 	void setDetails(int resNum, int lookLineNum, int talkLineNum, int useLineNum, int mode, SceneItem *item);
+	void setDetails(int resNum, int lookLineNum, int talkLineNum, int useLineNum);
+};
+
+class NamedObjectExt: public NamedObject {
+public:
+	int _flag;
+
+	NamedObjectExt() { _flag = 0; }
+	virtual Common::String getClassName() { return "NamedObjectExt"; }
+	virtual void synchronize(Serializer &s) {
+		NamedObject::synchronize(s);
+		s.syncAsSint16LE(_flag);
+	}
+};
+
+class NamedObject2: public NamedObject {
+public:
+	int _v1, _v2;
+
+	NamedObject2() { _v1 = _v2 = 0; }
+	virtual Common::String getClassName() { return "NamedObject2"; }
+	virtual void synchronize(Serializer &s) {
+		NamedObject::synchronize(s);
+		s.syncAsSint16LE(_v1);
+		s.syncAsSint16LE(_v2);
+	}
 };
 
 class CountdownObject: public NamedObject {
@@ -128,7 +166,7 @@ public:
 	SceneObject *_object;
 	FollowerObject();
 
-	virtual Common::String getClassName() { return "SceneObjectExt4"; }
+	virtual Common::String getClassName() { return "FollowerObject"; }
 	virtual void synchronize(Serializer &s);
 	virtual void remove();
 	virtual void dispatch();
@@ -137,12 +175,23 @@ public:
 	void setup(SceneObject *object, int visage, int frameNum, int yDiff);
 };
 
-enum ExitFrame { EXITFRAME_N = 1, EXITFRAME_NE = 2, EXITFRAME_E = 3, EXITFRAME_SE = 4, 
+class FocusObject: public NamedObject {
+public:
+	int _v90, _v92;
+	GfxSurface _img;
+
+	FocusObject();
+	virtual void postInit(SceneObjectList *OwnerList = NULL);
+	virtual void synchronize(Serializer &s);
+	virtual void remove();
+	virtual void process(Event &event);
+};
+
+enum ExitFrame { EXITFRAME_N = 1, EXITFRAME_NE = 2, EXITFRAME_E = 3, EXITFRAME_SE = 4,
 		EXITFRAME_S = 5, EXITFRAME_SW = 6, EXITFRAME_W = 7, EXITFRAME_NW = 8 };
 
 class SceneExt: public Scene {
 private:
-	void gunDisplay();
 	static void startStrip();
 	static void endStrip();
 public:
@@ -153,7 +202,7 @@ public:
 	bool _savedCanWalk;
 	int _field37A;
 
-	EventHandler *_eventHandler;
+	FocusObject *_focusObject;
 	Visage _cursorVisage;
 
 	Rect _v51C34;
@@ -162,6 +211,7 @@ public:
 
 	virtual Common::String getClassName() { return "SceneExt"; }
 	virtual void postInit(SceneObjectList *OwnerList = NULL);
+	virtual void remove();
 	virtual void process(Event &event);
 	virtual void dispatch();
 	virtual void loadScene(int sceneNum);
@@ -171,17 +221,23 @@ public:
 	void removeTimer(Timer *timer) { _timerList.remove(timer); }
 	bool display(CursorType action);
 	void fadeOut();
+	void gunDisplay();
+	void clearScreen();
 };
 
-class GroupedScene: public SceneExt {
+class PalettedScene: public SceneExt {
 public:
-	int _field412;
+	ScenePalette _palette;
 	int _field794;
 public:
-	GroupedScene();
+	PalettedScene();
 
+	virtual void synchronize(Serializer &s);
 	virtual void postInit(SceneObjectList *OwnerList = NULL);
 	virtual void remove();
+	PaletteFader *addFader(const byte *arrBufferRGB, int step, Action *action);
+	void add2Faders(const byte *arrBufferRGB, int step, int paletteNum, Action *action);
+	void sub15E4F(const byte *arrBufferRGB, int arg8, int paletteNum, Action *action, int fromColor1, int fromColor2, int toColor1, int toColor2, bool flag);
 };
 
 class SceneHandlerExt: public SceneHandler {
@@ -262,11 +318,12 @@ public:
 	InvObject _greensKnife;
 	InvObject _dogWhistle;
 	InvObject _ammoBelt;
-	InvObject _lastInvent;
+	InvObject _alleyCatKey;
 
 	BlueForceInvObjectList();
 	void reset();
 	void setObjectScene(int objectNum, int sceneNumber);
+	void alterInventory(int mode);
 
 	virtual Common::String getClassName() { return "BlueForceInvObjectList"; }
 };

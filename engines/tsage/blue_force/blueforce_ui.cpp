@@ -38,7 +38,7 @@ void StripProxy::process(Event &event) {
 /*--------------------------------------------------------------------------*/
 
 void UIElement::synchronize(Serializer &s) {
-	AltSceneObject::synchronize(s);
+	BackgroundSceneObject::synchronize(s);
 	s.syncAsSint16LE(_field88);
 	s.syncAsSint16LE(_enabled);
 	s.syncAsSint16LE(_frameNum);
@@ -137,7 +137,7 @@ void UIScore::draw() {
 
 void UIScore::updateScore() {
 	int score = BF_GLOBALS._uiElements._scoreValue;
-	
+
 	_digit3.setFrame(score / 1000 + 1); score %= 1000;
 	_digit2.setFrame(score / 100 + 1); score %= 100;
 	_digit1.setFrame(score / 10 + 1); score %= 10;
@@ -166,7 +166,7 @@ void UIInventorySlot::process(Event &event) {
 			showAmmoBelt();
 
 		} else if (_objIndex != INV_NONE) {
-			_object->setCursor();			
+			_object->setCursor();
 		}
 	}
 }
@@ -203,6 +203,8 @@ void UIInventoryScroll::process(Event &event) {
 		// Scroll the inventory as necessary
 		BF_GLOBALS._uiElements.scrollInventory(_isLeft);
 		event.handled = true;
+		break;
+	default:
 		break;
 	}
 }
@@ -241,7 +243,8 @@ void UICollection::show() {
 void UICollection::erase() {
 	if (_clearScreen) {
 		Rect tempRect(0, BF_INTERFACE_Y, SCREEN_WIDTH, SCREEN_HEIGHT);
-		GLOBALS._screenSurface.fillRect(tempRect, 0);
+		BF_GLOBALS._screenSurface.fillRect(tempRect, 0);
+		BF_GLOBALS._sceneManager._scene->_backSurface.fillRect(tempRect, 0);
 		_clearScreen = false;
 	}
 }
@@ -252,9 +255,14 @@ void UICollection::resetClear() {
 
 void UICollection::draw() {
 	if (_visible) {
-		// Draw the elements
+		// Draw the elements onto the background
 		for (uint idx = 0; idx < _objList.size(); ++idx)
 			_objList[idx]->draw();
+
+		// Draw the resulting UI onto the screen
+		BF_GLOBALS._screenSurface.copyFrom(BF_GLOBALS._sceneManager._scene->_backSurface,
+			Rect(0, BF_INTERFACE_Y, SCREEN_WIDTH, SCREEN_HEIGHT),
+			Rect(0, BF_INTERFACE_Y, SCREEN_WIDTH, SCREEN_HEIGHT));
 
 		_clearScreen = 1;
 	}
@@ -264,6 +272,34 @@ void UICollection::draw() {
 
 UIElements::UIElements(): UICollection() {
 	_cursorVisage.setVisage(1, 5);
+	g_saver->addLoadNotifier(&UIElements::loadNotifierProc);
+}
+
+void UIElements::synchronize(Serializer &s) {
+	UICollection::synchronize(s);
+
+	s.syncAsSint16LE(_slotStart);
+	s.syncAsSint16LE(_scoreValue);
+	s.syncAsByte(_active);
+
+	int count = _itemList.size();
+	s.syncAsSint16LE(count);
+	if (s.isLoading()) {
+		// Load in item list
+		_itemList.clear();
+
+		for (int idx = 0; idx < count; ++idx) {
+			int itemId;
+			s.syncAsSint16LE(itemId);
+			_itemList.push_back(itemId);
+		}
+	} else {
+		// Save item list
+		for (int idx = 0; idx < count; ++idx) {
+			int itemId = _itemList[idx];
+			s.syncAsSint16LE(itemId);
+		}
+	}
 }
 
 void UIElements::process(Event &event) {
@@ -299,7 +335,7 @@ void UIElements::process(Event &event) {
 			_cursorChanged = false;
 
 			SceneExt *scene = (SceneExt *)BF_GLOBALS._sceneManager._scene;
-			if (scene->_eventHandler) {
+			if (scene->_focusObject) {
 				GfxSurface surface = _cursorVisage.getFrame(7);
 				BF_GLOBALS._events.setCursor(surface);
 			}
@@ -369,7 +405,7 @@ void UIElements::setup(const Common::Point &pt) {
 }
 
 void UIElements::add(UIElement *obj) {
-	// Add object 
+	// Add object
 	assert(_objList.size() < 12);
 	_objList.push_back(obj);
 
@@ -385,7 +421,7 @@ void UIElements::add(UIElement *obj) {
  */
 void UIElements::updateInventory() {
 	_score.updateScore();
-	updateInvList();	
+	updateInvList();
 
 	// Enable scroll buttons if the player has more than four items
 	if (_itemList.size() > 4) {
@@ -469,6 +505,11 @@ void UIElements::scrollInventory(bool isLeft) {
 		++_slotStart;
 
 	updateInventory();
+}
+
+void UIElements::loadNotifierProc(bool postFlag) {
+	if (postFlag && BF_GLOBALS._uiElements._active)
+		BF_GLOBALS._uiElements.show();
 }
 
 } // End of namespace BlueForce
